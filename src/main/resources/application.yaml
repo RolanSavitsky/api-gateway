@@ -1,0 +1,27 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    default: local
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: user-service
+              uri: ${application.config.user-service-url}
+              predicates:
+                - Path=/users/**
+
+            - id: auth-service
+              uri: ${application.config.auth-service-url}
+              predicates:
+                - Path=/auth/**
+
+            - id: order-service
+              uri: ${application.config.order-service-url}
+              predicates:
+                - Path=/orders/**
