@@ -1,0 +1,176 @@
+services:
+  api-gateway:
+    build:
+      context: .
+    container_name: api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      USER_SERVICE_URL: ${USER_SERVICE_URL:?Set USER_SERVICE_URL}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:?Set AUTH_SERVICE_URL}
+      ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:?Set ORDER_SERVICE_URL}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY}
+    depends_on:
+      - user-service
+      - auth-service
+      - order-service
+    networks:
+      - gateway-net
+
+  user-service:
+    build:
+      context: ../user-service
+    container_name: user-service-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${USER_DB_HOST:?Set DB_HOST}
+      DB_PORT: ${USER_DB_PORT:?Set DB_PORT}
+      DB_NAME: ${USER_DB_NAME:?Set USER_DB_NAME}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY}
+    depends_on:
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      gateway-net:
+      user-net:
+
+  auth-service:
+    build:
+      context: ../auth-service
+    container_name: auth-service-app
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_NAME: ${AUTH_DB_NAME:?Set AUTH_DB_NAME}
+      DB_HOST: ${AUTH_DB_HOST:?Set DB_HOST}
+      DB_PORT: ${AUTH_DB_PORT:?Set DB_PORT}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:?Set USER_SERVICE_URL}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      gateway-net:
+      auth-net:
+
+  order-service:
+    build:
+      context: ../order-service
+    container_name: order-service-app
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${ORDER_DB_HOST:?Set DB_HOST}
+      DB_PORT: ${ORDER_DB_PORT:?Set DB_PORT}
+      DB_NAME: ${ORDER_DB_NAME:?Set ORDER_DB_NAME}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:?Set USER_SERVICE_URL}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY}
+    depends_on:
+      order-db:
+        condition: service_healthy
+    networks:
+      gateway-net:
+      order-net:
+
+  user-db:
+    image: postgres:15-alpine
+    container_name: users-db
+    environment:
+      POSTGRES_DB: ${USER_DB_NAME:?Set USER_DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - users_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - user-net
+
+  auth-db:
+    image: postgres:15-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME:?Set AUTH_DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - auth-net
+
+  order-db:
+    image: postgres:15-alpine
+    container_name: order-db
+    environment:
+      POSTGRES_DB: ${ORDER_DB_NAME:?Set ORDER_DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    ports:
+      - "5434:5432"
+    volumes:
+      - order_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - order-net
+
+  redis:
+    image: redis:alpine
+    container_name: users-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - user-net
+
+networks:
+  gateway-net:
+  user-net:
+  auth-net:
+  order-net:
+
+volumes:
+  users_postgres_data:
+  auth_postgres_data:
+  order_postgres_data:
